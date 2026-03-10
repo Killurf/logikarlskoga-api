@@ -35,8 +35,8 @@ app.post('/api/meeting-invites', async (req, res) => {
   let smsSent = 0;
 
   for (const user of users || []) {
-    const acceptUrl = `${APP_URL}/meeting-response?meeting=${meeting_id}&user=${user.id}&action=accept`;
-    const declineUrl = `${APP_URL}/meeting-response?meeting=${meeting_id}&user=${user.id}&action=decline`;
+    const acceptUrl = `${APP_URL}/mr?m=${meeting_id}&u=${user.id}&a=accept`;
+    const declineUrl = `${APP_URL}/mr?m=${meeting_id}&u=${user.id}&a=decline`;
 
     if (user.email) {
       try {
@@ -47,7 +47,7 @@ app.post('/api/meeting-invites', async (req, res) => {
           html: `
             <h2>${meeting.headline}</h2>
             <p><strong>Inbjudan från:</strong> ${inviterInfo}</p>
-            <p>${meeting.content || ''}</p>
+            ${meeting.content ? `<p>${meeting.content}</p>` : ''}
             <p><strong>Datum:</strong> ${dateTime}</p>
             <p><strong>Plats:</strong> ${meeting.place}</p>
             <br>
@@ -72,7 +72,7 @@ app.post('/api/meeting-invites', async (req, res) => {
           originatortype: 'alpha',
           originator: 'LogiKarlsk',
           type: 'text',
-          text: `Mötesinbjudan från ${inviterInfo}: ${meeting.headline}, ${dateTime}. Plats: ${meeting.place}. Svara här: ${acceptUrl}`,
+          text: `${inviterInfo} bjuder in: ${meeting.headline}, ${dateTime}. Svara: ${acceptUrl}`,
         });
         const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
         const smsResult = await smsResponse.text();
