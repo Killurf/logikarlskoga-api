@@ -53,7 +53,6 @@ app.post('/api/meeting-invites', async (req, res) => {
       return res.status(400).json({ error: 'meeting_id och invitee_ids krävs' });
     }
 
-    // Hämta mötet
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
       .select('*')
@@ -64,7 +63,6 @@ app.post('/api/meeting-invites', async (req, res) => {
       return res.status(404).json({ error: 'Mötet hittades inte' });
     }
 
-    // Hämta inbjudna användare
     const { data: users, error: usersError } = await supabase
       .from('users')
       .select('*')
@@ -79,9 +77,7 @@ app.post('/api/meeting-invites', async (req, res) => {
     let smsCount = 0;
 
     for (const user of users) {
-      const acceptUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}&a=accept`;
-      const declineUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}&a=decline`;
-      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}`;
+      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}`;
 
       // Skicka e-post
       if (user.email) {
@@ -91,18 +87,16 @@ app.post('/api/meeting-invites', async (req, res) => {
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+              <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px;">
                 <h2>${meeting.headline}</h2>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
                 <p><strong>Datum:</strong> ${dateStr}</p>
                 <p><strong>Plats:</strong> ${meeting.place}</p>
                 ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
-                ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
-                <div style="margin-top: 24px;">
-                  <a href="${acceptUrl}" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-right: 12px;">Tacka ja</a>
-                  <a href="${declineUrl}" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Tacka nej</a>
+                ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
+                <div style="margin: 24px 0; text-align: center;">
+                  <a href="${respondUrl}" style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-size: 16px;">Svara på inbjudan</a>
                 </div>
-                <p style="margin-top: 24px; font-size: 12px; color: #888;">Du kan också svara via: <a href="${respondUrl}">${respondUrl}</a></p>
               </div>
             `,
           });
@@ -117,7 +111,7 @@ app.post('/api/meeting-invites', async (req, res) => {
       const phone = formatPhone(user.mobile);
       if (phone) {
         try {
-          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara:\nJa: ${acceptUrl}\nNej: ${declineUrl}`;
+          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: ${respondUrl}`;
 
           const params = new URLSearchParams({
             username: CELLSYNT_USERNAME,
