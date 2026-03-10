@@ -88,4 +88,38 @@ app.post('/api/meeting-invites', async (req, res) => {
   res.json({ success: true, sent: (users || []).length, emailsSent, smsSent });
 });
 
+app.post('/api/send-sms', async (req, res) => {
+  const { recipient_user_id, message, sender_name, sender_company } = req.body;
+
+  const { data: recipient } = await supabase
+    .from('users').select('mobile, name').eq('id', recipient_user_id).single();
+
+  if (!recipient || !recipient.mobile) {
+    return res.status(400).json({ error: 'Mottagaren har inget mobilnummer registrerat.' });
+  }
+
+  const senderInfo = sender_name + (sender_company ? `, ${sender_company}` : '');
+  const fullText = `Från ${senderInfo}: ${message}`;
+
+  try {
+    const formattedNumber = recipient.mobile.replace(/[^0-9]/g, '').replace(/^0/, '46');
+    const params = new URLSearchParams({
+      username: process.env.CELLSYNT_USERNAME,
+      password: process.env.CELLSYNT_PASSWORD,
+      destination: formattedNumber,
+      originatortype: 'alpha',
+      originator: 'LogiKarlsk',
+      type: 'text',
+      text: fullText,
+    });
+    const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
+    const smsResult = await smsResponse.text();
+    console.log(`SMS till ${formattedNumber}: ${smsResult}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('SMS error:', err);
+    res.status(500).json({ error: 'Kunde inte skicka SMS' });
+  }
+});
+
 app.listen(3000, () => console.log('API running on port 3000'));
