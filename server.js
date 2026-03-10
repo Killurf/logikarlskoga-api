@@ -189,6 +189,38 @@ app.post('/api/send-sms', async (req, res) => {
   }
 });
 
+// ===== Mejl vid borttagning av medlem =====
+app.post('/api/member-removed', async (req, res) => {
+  try {
+    const { email, name, company } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'email krävs' });
+    }
+
+    await resend.emails.send({
+      from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
+      to: email,
+      subject: 'Du har tagits bort från LogiKarlskoga',
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px;">
+          <h2>Hej ${name || ''},</h2>
+          <p>Vi vill informera dig om att du inte längre tillhör gruppen LogiKarlskoga.</p>
+          ${company ? `<p>Ditt företag <strong>${company}</strong> har tagits bort från medlemsregistret.</p>` : ''}
+          <p>Om du har frågor, kontakta oss genom att svara på detta mejl.</p>
+          <p style="margin-top: 24px; color: #666;">Med vänliga hälsningar,<br/>LogiKarlskoga</p>
+        </div>
+      `,
+    });
+
+    console.log(`Removal email sent to ${email}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Member removal email error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'LogiKarlskoga API' });
