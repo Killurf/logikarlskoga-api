@@ -13,8 +13,8 @@ const APP_URL = process.env.APP_URL;
 
 function formatDateTime(isoString) {
   const d = new Date(isoString);
-  const date = d.toLocaleDateString('sv-SE');
-  const time = d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit' });
+  const date = d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
+  const time = d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
   return `${date} kl ${time}`;
 }
 
@@ -72,7 +72,9 @@ app.post('/api/meeting-invites', async (req, res) => {
           destination: formattedNumber,
           originatortype: 'alpha',
           originator: 'LogiKarlsk',
-          type: 'longtext',
+          type: 'text',
+          allowconcat: '6',
+          charset: 'UTF-8',
           text: smsText,
         });
         const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
@@ -115,6 +117,7 @@ app.post('/api/send-sms', async (req, res) => {
       originatortype: 'alpha',
       originator: 'LogiKarlsk',
       type: 'text',
+      charset: 'UTF-8',
       text: fullText,
     });
     const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
