@@ -21,48 +21,62 @@ app.post('/api/meeting-invites', async (req, res) => {
   const { data: users } = await supabase
     .from('users').select('*').in('id', invitee_ids);
 
+  let emailsSent = 0;
+  let smsSent = 0;
+
   for (const user of users || []) {
     const acceptUrl = `${APP_URL}/meeting-response?meeting=${meeting_id}&user=${user.id}&action=accept`;
     const declineUrl = `${APP_URL}/meeting-response?meeting=${meeting_id}&user=${user.id}&action=decline`;
 
-    try {
-      await resend.emails.send({
-        from: 'LogiKarlskoga <noreply@din-doman.se>',
-        to: user.email,
-        subject: `Mötesinbjudan: ${meeting.headline}`,
-        html: `
-          <h2>${meeting.headline}</h2>
-          <p>${meeting.content || ''}</p>
-          <p><strong>Datum:</strong> ${new Date(meeting.date).toLocaleString('sv-SE')}</p>
-          <p><strong>Plats:</strong> ${meeting.place}</p>
-          <br/>
-          <a href="${acceptUrl}" style="background:#2d6a4f;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-right:8px;">Tacka ja</a>
-          <a href="${declineUrl}" style="background:#6b7280;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;">Tacka nej</a>
-        `,
-      });
-    } catch (err) {
-      console.error('Resend error:', err);
+    // Skicka e-post via Resend
+    if (user.email) {
+      try {
+        await resend.emails.send({
+          from: 'LogiKarlskoga <noreply@gronfeltsgarden.se>',
+          to: user.email,
+          subject: `Mötesinbjudan: ${meeting.headline}`,
+          html: `
+            <h2>${meeting.headline}</h2>
+            <p>${meeting.content || ''}</p>
+            <p><strong>Datum:</strong> ${new Date(meeting.date).toLocaleString('sv-SE')}</p>
+            <p><strong>Plats:</strong> ${meeting.place}</p>
+            <br>
+            <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-right:12px;">Tacka ja</a>
+            <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;">Tacka nej</a>
+          `,
+        });
+        emailsSent++;
+        console.log(`E-post skickad till ${user.email}`);
+      } catch (err) {
+        console.error(`Resend error för ${user.email}:`, err);
+      }
     }
 
+    // Skicka SMS via Cellsynt
     if (user.mobile) {
       try {
+        const formattedNumber = user.mobile.replace(/[^0-9]/g, '').replace(/^0/, '46');
         const params = new URLSearchParams({
           username: process.env.CELLSYNT_USERNAME,
           password: process.env.CELLSYNT_PASSWORD,
-          destination: user.mobile.replace(/[^0-9+]/g, ''),
+          destination: formattedNumber,
           originatortype: 'alpha',
           originator: 'LogiKarlskoga',
           type: 'text',
-          text: `Mötesinbjudan: ${meeting.headline}, ${new Date(meeting.date).toLocaleString('sv-SE')}. Svara här: ${acceptUrl}`,
+          text: `Mötesinbjudan: ${meeting.headline}, ${new Date(meeting.date).toLocaleString('sv-SE')}. Plats: ${meeting.place}. Svara här: ${acceptUrl}`,
         });
-        await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
+        const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
+        const smsResult = await smsResponse.text();
+        console.log(`Cellsynt svar för ${formattedNumber}: ${smsResult}`);
+        smsSent++;
       } catch (err) {
-        console.error('Cellsynt error:', err);
+        console.error(`Cellsynt error för ${user.mobile}:`, err);
       }
     }
   }
 
-  res.json({ success: true, sent: (users || []).length });
+  console.log(`Totalt: ${emailsSent} e-post, ${smsSent} SMS skickade`);
+  res.json({ success: true, sent: (users || []).length, emailsSent, smsSent });
 });
 
 app.listen(3000, () => console.log('API running on port 3000'));
