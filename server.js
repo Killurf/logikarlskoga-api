@@ -87,16 +87,16 @@ app.post('/api/meeting-invites', async (req, res) => {
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
-              <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px;">
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
                 <h2>${meeting.headline}</h2>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
-                <p><strong>Datum:</strong> ${dateStr}</p>
-                <p><strong>Plats:</strong> ${meeting.place}</p>
-                ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
-                ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
-                <div style="margin: 24px 0; text-align: center;">
-                  <a href="${respondUrl}" style="background-color: #2563eb; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-size: 16px;">Svara på inbjudan</a>
-                </div>
+                <p>Datum: ${dateStr}</p>
+                <p>Plats: ${meeting.place}</p>
+                ${meeting.osa ? `<p>OSA senast: ${formatDateTime(meeting.osa)}</p>` : ''}
+                ${meeting.created_by_name ? `<p>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+                <p style="margin-top: 24px;">
+                  <a href="${respondUrl}" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; display: inline-block; font-weight: 600;">Svara på inbjudan</a>
+                </p>
               </div>
             `,
           });
@@ -144,6 +144,55 @@ app.post('/api/meeting-invites', async (req, res) => {
     res.json({ success: true, emailCount, smsCount });
   } catch (err) {
     console.error('Server error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
+// ===== Bjud in nya medlemmar via e-post =====
+app.post('/api/invite', async (req, res) => {
+  try {
+    const { emails, message } = req.body;
+
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ error: 'Inga e-postadresser angivna' });
+    }
+
+    let successCount = 0;
+
+    for (const email of emails) {
+      try {
+        await resend.emails.send({
+          from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
+          to: email,
+          subject: 'Inbjudan till LogiKarlskoga',
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2 style="color: #1a1a1a;">Välkommen till LogiKarlskoga!</h2>
+              <p style="color: #333; line-height: 1.6;">${message.replace(/\n/g, '<br>')}</p>
+              <p style="margin-top: 24px;">
+                <a href="${BASE_URL}/register"
+                   style="background: #2563eb; color: white; padding: 12px 24px;
+                   border-radius: 6px; text-decoration: none; display: inline-block;
+                   font-weight: 600;">
+                  Registrera dig här
+                </a>
+              </p>
+              <p style="color: #888; font-size: 12px; margin-top: 32px;">
+                Detta mejl skickades via LogiKarlskoga
+              </p>
+            </div>
+          `,
+        });
+        successCount++;
+        console.log(`Inbjudan skickad till ${email}`);
+      } catch (err) {
+        console.error(`Kunde inte skicka till ${email}:`, err.message);
+      }
+    }
+
+    res.json({ success: true, count: successCount });
+  } catch (err) {
+    console.error('Invite error:', err);
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });
@@ -203,12 +252,12 @@ app.post('/api/member-removed', async (req, res) => {
       to: email,
       subject: 'Du har tagits bort från LogiKarlskoga',
       html: `
-        <div style="font-family: sans-serif; max-width: 500px; margin: auto; padding: 20px;">
-          <h2>Hej ${name || ''},</h2>
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+          <p>Hej ${name || ''},</p>
           <p>Vi vill informera dig om att du inte längre tillhör gruppen LogiKarlskoga.</p>
-          ${company ? `<p>Ditt företag <strong>${company}</strong> har tagits bort från medlemsregistret.</p>` : ''}
+          ${company ? `<p>Ditt företag ${company} har tagits bort från medlemsregistret.</p>` : ''}
           <p>Om du har frågor, kontakta oss genom att svara på detta mejl.</p>
-          <p style="margin-top: 24px; color: #666;">Med vänliga hälsningar,<br/>LogiKarlskoga</p>
+          <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
         </div>
       `,
     });
