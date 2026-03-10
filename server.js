@@ -65,19 +65,24 @@ app.post('/api/meeting-invites', async (req, res) => {
     if (user.mobile) {
       try {
         const formattedNumber = user.mobile.replace(/[^0-9]/g, '').replace(/^0/, '46');
+        const smsText = `${inviterInfo} bjuder in: ${meeting.headline}, ${dateTime}. Tacka ja: ${acceptUrl} Tacka nej: ${declineUrl}`;
         const params = new URLSearchParams({
           username: process.env.CELLSYNT_USERNAME,
           password: process.env.CELLSYNT_PASSWORD,
           destination: formattedNumber,
           originatortype: 'alpha',
           originator: 'LogiKarlsk',
-          type: 'text',
-          text: `${inviterInfo} bjuder in: ${meeting.headline}, ${dateTime}. Svara: ${acceptUrl}`,
+          type: 'concat',
+          text: smsText,
         });
         const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
         const smsResult = await smsResponse.text();
         console.log(`Cellsynt svar för ${formattedNumber}: ${smsResult}`);
-        smsSent++;
+        if (smsResult.includes('Error')) {
+          console.error(`SMS-fel: ${smsResult}`);
+        } else {
+          smsSent++;
+        }
       } catch (err) {
         console.error(`Cellsynt error för ${user.mobile}:`, err);
       }
