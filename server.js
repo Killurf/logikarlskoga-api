@@ -72,8 +72,7 @@ app.post('/api/meeting-invites', async (req, res) => {
           destination: formattedNumber,
           originatortype: 'alpha',
           originator: 'LogiKarlsk',
-          type: 'concat',
-          maxparts: '3',
+          type: 'longtext',
           text: smsText,
         });
         const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
