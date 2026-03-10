@@ -4,130 +4,203 @@ const { Resend } = require('resend');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
-app.use(express.json());
 app.use(cors());
+app.use(express.json());
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY);
-const APP_URL = process.env.APP_URL;
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
-function formatDateTime(isoString) {
-  const d = new Date(isoString);
-  const date = d.toLocaleDateString('sv-SE', { timeZone: 'Europe/Stockholm' });
-  const time = d.toLocaleTimeString('sv-SE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Stockholm' });
-  return `${date} kl ${time}`;
+const BASE_URL = 'https://logikarl-magic-buddy.lovable.app';
+const CELLSYNT_USERNAME = process.env.CELLSYNT_USERNAME;
+const CELLSYNT_PASSWORD = process.env.CELLSYNT_PASSWORD;
+
+function formatDateTime(dateStr) {
+  const d = new Date(dateStr);
+  return d.toLocaleString('sv-SE', {
+    timeZone: 'Europe/Stockholm',
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-app.post('/api/meeting-invites', async (req, res) => {
-  const { meeting_id, invitee_ids } = req.body;
-
-  const { data: meeting } = await supabase
-    .from('meetings').select('*').eq('id', meeting_id).single();
-  if (!meeting) return res.status(404).json({ error: 'Meeting not found' });
-
-  const { data: users } = await supabase
-    .from('users').select('*').in('id', invitee_ids);
-
-  const inviterInfo = meeting.created_by_name + (meeting.created_by_company ? `, ${meeting.created_by_company}` : '');
-  const dateTime = formatDateTime(meeting.date);
-
-  let emailsSent = 0;
-  let smsSent = 0;
-
-  for (const user of users || []) {
-    const acceptUrl = `${APP_URL}/mr?m=${meeting_id}&u=${user.id}&a=accept`;
-    const declineUrl = `${APP_URL}/mr?m=${meeting_id}&u=${user.id}&a=decline`;
-
-    if (user.email) {
-      try {
-        await resend.emails.send({
-          from: 'LogiKarlskoga <noreply@gronfeltsgarden.se>',
-          to: user.email,
-          subject: `Mötesinbjudan: ${meeting.headline}`,
-          html: `
-            <h2>${meeting.headline}</h2>
-            <p><strong>Inbjudan från:</strong> ${inviterInfo}</p>
-            ${meeting.content ? `<p>${meeting.content}</p>` : ''}
-            <p><strong>Datum:</strong> ${dateTime}</p>
-            <p><strong>Plats:</strong> ${meeting.place}</p>
-            <br>
-            <a href="${acceptUrl}" style="background:#16a34a;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;margin-right:12px;">Tacka ja</a>
-            <a href="${declineUrl}" style="background:#dc2626;color:white;padding:12px 24px;text-decoration:none;border-radius:6px;">Tacka nej</a>
-          `,
-        });
-        emailsSent++;
-        console.log(`E-post skickad till ${user.email}`);
-      } catch (err) {
-        console.error(`Resend error för ${user.email}:`, err);
-      }
-    }
-
-    if (user.mobile) {
-      try {
-        const formattedNumber = user.mobile.replace(/[^0-9]/g, '').replace(/^0/, '46');
-        const smsText = `${meeting.headline}, ${dateTime}. Svara: ${acceptUrl}`;
-        const params = new URLSearchParams({
-          username: process.env.CELLSYNT_USERNAME,
-          password: process.env.CELLSYNT_PASSWORD,
-          destination: formattedNumber,
-          originatortype: 'alpha',
-          originator: 'LogiKarlsk',
-          type: 'text',
-          allowconcat: '6',
-          charset: 'UTF-8',
-          text: smsText,
-        });
-        const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
-        const smsResult = await smsResponse.text();
-        console.log(`Cellsynt svar för ${formattedNumber}: ${smsResult}`);
-        if (smsResult.includes('Error')) {
-          console.error(`SMS-fel: ${smsResult}`);
-        } else {
-          smsSent++;
-        }
-      } catch (err) {
-        console.error(`Cellsynt error för ${user.mobile}:`, err);
-      }
-    }
+function formatPhone(mobile) {
+  if (!mobile) return null;
+  let num = mobile.replace(/[\s\-]/g, '');
+  if (num.startsWith('+46')) {
+    num = '46' + num.slice(3);
+  } else if (num.startsWith('0')) {
+    num = '46' + num.slice(1);
   }
+  if (/^46\d{7,10}$/.test(num)) {
+    return num;
+  }
+  return null;
+}
 
-  console.log(`Totalt: ${emailsSent} e-post, ${smsSent} SMS skickade`);
-  res.json({ success: true, sent: (users || []).length, emailsSent, smsSent });
+// ===== Skicka mötesbjudningar (e-post + SMS) =====
+app.post('/api/meeting-invites', async (req, res) => {
+  try {
+    const { meeting_id, invitee_ids } = req.body;
+
+    if (!meeting_id || !invitee_ids || invitee_ids.length === 0) {
+      return res.status(400).json({ error: 'meeting_id och invitee_ids krävs' });
+    }
+
+    // Hämta mötet
+    const { data: meeting, error: meetingError } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('id', meeting_id)
+      .single();
+
+    if (meetingError || !meeting) {
+      return res.status(404).json({ error: 'Mötet hittades inte' });
+    }
+
+    // Hämta inbjudna användare
+    const { data: users, error: usersError } = await supabase
+      .from('users')
+      .select('*')
+      .in('id', invitee_ids);
+
+    if (usersError || !users || users.length === 0) {
+      return res.status(404).json({ error: 'Inga användare hittades' });
+    }
+
+    const dateStr = formatDateTime(meeting.date);
+    let emailCount = 0;
+    let smsCount = 0;
+
+    for (const user of users) {
+      const acceptUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}&a=accept`;
+      const declineUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}&a=decline`;
+      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&u=${user.id}`;
+
+      // Skicka e-post
+      if (user.email) {
+        try {
+          await resend.emails.send({
+            from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
+            to: user.email,
+            subject: `Mötesinbjudan: ${meeting.headline}`,
+            html: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>${meeting.headline}</h2>
+                ${meeting.content ? `<p>${meeting.content}</p>` : ''}
+                <p><strong>Datum:</strong> ${dateStr}</p>
+                <p><strong>Plats:</strong> ${meeting.place}</p>
+                ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
+                ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+                <div style="margin-top: 24px;">
+                  <a href="${acceptUrl}" style="background-color: #22c55e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-right: 12px;">Tacka ja</a>
+                  <a href="${declineUrl}" style="background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Tacka nej</a>
+                </div>
+                <p style="margin-top: 24px; font-size: 12px; color: #888;">Du kan också svara via: <a href="${respondUrl}">${respondUrl}</a></p>
+              </div>
+            `,
+          });
+          emailCount++;
+          console.log(`E-post skickat till ${user.email}`);
+        } catch (err) {
+          console.error(`E-postfel till ${user.email}:`, err.message);
+        }
+      }
+
+      // Skicka SMS
+      const phone = formatPhone(user.mobile);
+      if (phone) {
+        try {
+          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara:\nJa: ${acceptUrl}\nNej: ${declineUrl}`;
+
+          const params = new URLSearchParams({
+            username: CELLSYNT_USERNAME,
+            password: CELLSYNT_PASSWORD,
+            destination: phone,
+            originatortype: 'alpha',
+            originator: 'LogiKarlsk',
+            type: 'text',
+            allowconcat: '6',
+            charset: 'UTF-8',
+            text: smsText,
+          });
+
+          const response = await fetch('https://se-1.cellsynt.net/sms.php?' + params.toString());
+          const result = await response.text();
+          console.log(`Cellsynt svar för ${phone}: ${result}`);
+
+          if (result.startsWith('OK')) {
+            smsCount++;
+          } else {
+            console.error(`SMS-fel: ${result}`);
+          }
+        } catch (err) {
+          console.error(`SMS-fel till ${phone}:`, err.message);
+        }
+      }
+    }
+
+    console.log(`Totalt: ${emailCount} e-post, ${smsCount} SMS skickade`);
+    res.json({ success: true, emailCount, smsCount });
+  } catch (err) {
+    console.error('Server error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
 });
 
+// ===== Skicka manuellt SMS =====
 app.post('/api/send-sms', async (req, res) => {
-  const { recipient_user_id, message, sender_name, sender_company } = req.body;
-
-  const { data: recipient } = await supabase
-    .from('users').select('mobile, name').eq('id', recipient_user_id).single();
-
-  if (!recipient || !recipient.mobile) {
-    return res.status(400).json({ error: 'Mottagaren har inget mobilnummer registrerat.' });
-  }
-
-  const senderInfo = sender_name + (sender_company ? `, ${sender_company}` : '');
-  const fullText = `Från ${senderInfo}: ${message}`;
-
   try {
-    const formattedNumber = recipient.mobile.replace(/[^0-9]/g, '').replace(/^0/, '46');
+    const { to, message } = req.body;
+
+    if (!to || !message) {
+      return res.status(400).json({ error: 'to och message krävs' });
+    }
+
+    const phone = formatPhone(to);
+    if (!phone) {
+      return res.status(400).json({ error: 'Ogiltigt telefonnummer' });
+    }
+
     const params = new URLSearchParams({
-      username: process.env.CELLSYNT_USERNAME,
-      password: process.env.CELLSYNT_PASSWORD,
-      destination: formattedNumber,
+      username: CELLSYNT_USERNAME,
+      password: CELLSYNT_PASSWORD,
+      destination: phone,
       originatortype: 'alpha',
       originator: 'LogiKarlsk',
       type: 'text',
+      allowconcat: '6',
       charset: 'UTF-8',
-      text: fullText,
+      text: message,
     });
-    const smsResponse = await fetch(`https://se-1.cellsynt.net/sms.php?${params}`);
-    const smsResult = await smsResponse.text();
-    console.log(`SMS till ${formattedNumber}: ${smsResult}`);
-    res.json({ success: true });
+
+    const response = await fetch('https://se-1.cellsynt.net/sms.php?' + params.toString());
+    const result = await response.text();
+    console.log(`SMS till ${phone}: ${result}`);
+
+    if (result.startsWith('OK')) {
+      res.json({ success: true, result });
+    } else {
+      res.status(400).json({ error: result });
+    }
   } catch (err) {
     console.error('SMS error:', err);
-    res.status(500).json({ error: 'Kunde inte skicka SMS' });
+    res.status(500).json({ error: 'Internt serverfel' });
   }
 });
 
-app.listen(3000, () => console.log('API running on port 3000'));
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', service: 'LogiKarlskoga API' });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server körs på port ${PORT}`);
+});
