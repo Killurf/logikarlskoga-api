@@ -301,3 +301,45 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server körs på port ${PORT}`);
 });
+// ===== Mejl vid inställt möte =====
+app.post('/api/meeting-cancelled', async (req, res) => {
+  try {
+    const { emails, headline, date, place } = req.body;
+
+    if (!emails || emails.length === 0) {
+      return res.status(400).json({ error: 'Inga mottagare' });
+    }
+
+    const dateStr = formatDateTime(date);
+    let count = 0;
+
+    for (const { email, name } of emails) {
+      try {
+        await resend.emails.send({
+          from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
+          to: email,
+          subject: `Inställt möte: ${headline}`,
+          html: `
+            <div>
+              <h2>Hej ${name || ''},</h2>
+              <p>Mötet <strong>${headline}</strong> har ställts in.</p>
+              <p><strong>Datum:</strong> ${dateStr}</p>
+              <p><strong>Plats:</strong> ${place}</p>
+              <p>Kontakta arrangören om du har frågor.</p>
+              <p>Med vänliga hälsningar,<br/>LogiKarlskoga</p>
+            </div>
+          `,
+        });
+        count++;
+      } catch (err) {
+        console.error(`Cancellation email error for ${email}:`, err.message);
+      }
+    }
+
+    res.json({ success: true, count });
+  } catch (err) {
+    console.error('Meeting cancelled error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
+  }
+});
+
