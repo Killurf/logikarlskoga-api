@@ -279,3 +279,30 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server körs på port ${PORT}`);
 });
+app.post("/api/meeting-invite-external", async (req, res) => {
+  try {
+    const { emails, meeting_id, message, subject } = req.body;
+
+    if (!emails?.length || !subject || !message) {
+      return res.status(400).json({ error: "Saknar obligatoriska fält" });
+    }
+
+    const results = await Promise.allSettled(
+      emails.map((email) =>
+        resend.emails.send({
+          from: "LogiKarlskoga <noreply@gronfeltsgarden.se>",
+          to: email,
+          subject: subject,
+          text: message,
+        })
+      )
+    );
+
+    const sent = results.filter((r) => r.status === "fulfilled").length;
+    res.json({ count: sent });
+  } catch (err) {
+    console.error("meeting-invite-external error:", err);
+    res.status(500).json({ error: "Kunde inte skicka inbjudan" });
+  }
+});
+
