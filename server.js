@@ -342,4 +342,29 @@ app.post('/api/meeting-cancelled', async (req, res) => {
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });
+app.post('/api/meeting-updated', async (req, res) => {
+  const { recipients, headline, oldDate, newDate, place } = req.body;
+  const { format } = require('date-fns');
+  const { sv } = require('date-fns/locale');
+  
+  const newFormatted = format(new Date(newDate), "d MMMM yyyy 'kl' HH:mm", { locale: sv });
+  
+  for (const r of recipients) {
+    // Skicka mejl via Resend
+    await resend.emails.send({
+      from: 'LogiKarlskoga <no-reply@gronfeltsgarden.se>',
+      to: r.email,
+      subject: `Ändrad tid: ${headline}`,
+      html: `<p>Hej ${r.name},</p><p>Mötet <strong>${headline}</strong> har fått ny tid: <strong>${newFormatted}</strong>, ${place}.</p>`,
+    });
+
+    // Skicka SMS om mobilnummer finns
+    if (r.mobile) {
+      // Skicka via Cellsynt med ert befintliga mönster
+      // "Mötet {headline} har ändrats till {newFormatted}, {place}"
+    }
+  }
+  
+  res.json({ success: true });
+});
 
