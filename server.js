@@ -98,7 +98,6 @@ app.post('/api/meeting-invites', async (req, res) => {
     for (const user of users) {
       const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(user.email)}`;
 
-      // Skicka e-post
       if (user.email) {
         try {
           await resend.emails.send({
@@ -106,15 +105,15 @@ app.post('/api/meeting-invites', async (req, res) => {
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
-              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
                 <h2>${meeting.headline}</h2>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
                 <p><strong>Datum:</strong> ${dateStr}</p>
                 <p><strong>Plats:</strong> ${meeting.place}</p>
                 ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
-                ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
-                <p style="margin-top:24px">
-                  <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Svara på inbjudan</a>
+                ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+                <p style="margin-top:20px;">
+                  <a href="${respondUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Svara på inbjudan</a>
                 </p>
               </div>
             `,
@@ -126,11 +125,10 @@ app.post('/api/meeting-invites', async (req, res) => {
         }
       }
 
-      // Skicka SMS
       const phone = formatPhone(user.mobile);
       if (phone) {
         try {
-          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: ${respondUrl}`;
+          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: https://${respondUrl.replace('https://', '')}`;
           const ok = await sendSms(phone, smsText);
           if (ok) smsCount++;
         } catch (err) {
@@ -165,13 +163,13 @@ app.post('/api/invite', async (req, res) => {
           to: email,
           subject: 'Inbjudan till LogiKarlskoga',
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
               <h2>Välkommen till LogiKarlskoga!</h2>
               <p>${message.replace(/\n/g, '<br>')}</p>
-              <p style="margin-top:24px">
-                <a href="${BASE_URL}/register" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Registrera dig här</a>
+              <p style="margin-top:20px;">
+                <a href="${BASE_URL}/register" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Registrera dig här</a>
               </p>
-              <p style="margin-top:24px;font-size:12px;color:#888">
+              <p style="margin-top:30px;font-size:12px;color:#888;">
                 Detta mejl skickades via LogiKarlskoga
               </p>
             </div>
@@ -231,7 +229,7 @@ app.post('/api/member-removed', async (req, res) => {
       to: email,
       subject: 'Du har tagits bort från LogiKarlskoga',
       html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
           <h2>Hej ${name || ''},</h2>
           <p>Vi vill informera dig om att du har tagits bort från medlemsregistret i LogiKarlskoga.</p>
           <p>Om du har frågor, kontakta oss genom att svara på detta mejl.</p>
@@ -253,26 +251,46 @@ app.post('/api/meeting-invite-external', async (req, res) => {
   try {
     const { emails, meeting_id, message, subject } = req.body;
 
-    if (!emails?.length || !subject || !message) {
+    if (!emails?.length || !meeting_id) {
       return res.status(400).json({ error: 'Saknar obligatoriska fält' });
     }
 
+    // Hämta mötet från databasen för att säkerställa korrekt info
+    const { data: meeting, error: meetingError } = await supabase
+      .from('meetings')
+      .select('*')
+      .eq('id', meeting_id)
+      .single();
+
+    if (meetingError || !meeting) {
+      return res.status(404).json({ error: 'Mötet hittades inte' });
+    }
+
+    const dateStr = formatDateTime(meeting.date);
     let sent = 0;
 
     for (const email of emails) {
       try {
         const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}`;
-        const htmlMessage = message.replace(/\n/g, '<br>');
 
         await resend.emails.send({
           from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
           to: email,
-          subject: subject,
+          subject: subject || `Mötesinbjudan: ${meeting.headline}`,
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
-              <p>${htmlMessage}</p>
-              <p style="margin-top:24px">
-                <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Svara på inbjudan</a>
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+              <h2>${meeting.headline}</h2>
+              ${meeting.content ? `<p>${meeting.content}</p>` : ''}
+              <p><strong>Datum:</strong> ${dateStr}</p>
+              <p><strong>Plats:</strong> ${meeting.place}</p>
+              ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
+              ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+              ${message ? `<hr style="margin:20px 0;border:none;border-top:1px solid #eee;"><p>${message.replace(/\n/g, '<br>')}</p>` : ''}
+              <p style="margin-top:24px;">
+                <a href="${respondUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Svara på inbjudan</a>
+              </p>
+              <p style="margin-top:30px;font-size:12px;color:#888;">
+                Detta mejl skickades via LogiKarlskoga
               </p>
             </div>
           `,
@@ -310,7 +328,7 @@ app.post('/api/meeting-cancelled', async (req, res) => {
           to: email,
           subject: `Inställt möte: ${headline}`,
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
               <h2>Hej ${name || ''},</h2>
               <p>Mötet <strong>${headline}</strong> har ställts in.</p>
               <p><strong>Datum:</strong> ${dateStr}</p>
@@ -347,7 +365,6 @@ app.post('/api/meeting-updated', async (req, res) => {
     let smsCount = 0;
 
     for (const r of recipients) {
-      // Skicka mejl
       if (r.email) {
         try {
           await resend.emails.send({
@@ -355,7 +372,7 @@ app.post('/api/meeting-updated', async (req, res) => {
             to: r.email,
             subject: `Ändrad tid: ${headline}`,
             html: `
-              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
                 <h2>Hej ${r.name || ''},</h2>
                 <p>Mötet <strong>${headline}</strong> har fått ny tid.</p>
                 <p><strong>Ny tid:</strong> ${newFormatted}</p>
@@ -370,7 +387,6 @@ app.post('/api/meeting-updated', async (req, res) => {
         }
       }
 
-      // Skicka SMS
       const phone = formatPhone(r.mobile);
       if (phone) {
         try {
@@ -394,6 +410,10 @@ app.post('/api/meeting-updated', async (req, res) => {
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'LogiKarlskoga API' });
+});
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok' });
 });
 
 const PORT = process.env.PORT || 3001;
