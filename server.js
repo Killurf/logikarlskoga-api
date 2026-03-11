@@ -44,7 +44,26 @@ function formatPhone(mobile) {
   return null;
 }
 
-// ===== Skicka mötesinbjudningar (e-post + SMS) =====
+async function sendSms(phone, text) {
+  const params = new URLSearchParams({
+    username: CELLSYNT_USERNAME,
+    password: CELLSYNT_PASSWORD,
+    destination: phone,
+    originatortype: 'alpha',
+    originator: 'LogiKarlsk',
+    type: 'text',
+    allowconcat: '6',
+    charset: 'UTF-8',
+    text,
+  });
+
+  const response = await fetch('https://se-1.cellsynt.net/sms.php?' + params.toString());
+  const result = await response.text();
+  console.log(`Cellsynt svar för ${phone}: ${result}`);
+  return result.startsWith('OK');
+}
+
+// ===== Skicka mötesinbjudningar till medlemmar (e-post + SMS) =====
 app.post('/api/meeting-invites', async (req, res) => {
   try {
     const { meeting_id, invitee_ids } = req.body;
@@ -77,7 +96,7 @@ app.post('/api/meeting-invites', async (req, res) => {
     let smsCount = 0;
 
     for (const user of users) {
-      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}`;
+      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(user.email)}`;
 
       // Skicka e-post
       if (user.email) {
@@ -87,15 +106,15 @@ app.post('/api/meeting-invites', async (req, res) => {
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
-              <div>
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
                 <h2>${meeting.headline}</h2>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
-                <p>Datum: ${dateStr}</p>
-                <p>Plats: ${meeting.place}</p>
-                ${meeting.osa ? `<p>OSA senast: ${formatDateTime(meeting.osa)}</p>` : ''}
-                ${meeting.created_by_name ? `<p>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
-                <p>
-                  <a href="${respondUrl}">Svara på inbjudan</a>
+                <p><strong>Datum:</strong> ${dateStr}</p>
+                <p><strong>Plats:</strong> ${meeting.place}</p>
+                ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
+                ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
+                <p style="margin-top:24px">
+                  <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Svara på inbjudan</a>
                 </p>
               </div>
             `,
@@ -112,28 +131,8 @@ app.post('/api/meeting-invites', async (req, res) => {
       if (phone) {
         try {
           const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: ${respondUrl}`;
-
-          const params = new URLSearchParams({
-            username: CELLSYNT_USERNAME,
-            password: CELLSYNT_PASSWORD,
-            destination: phone,
-            originatortype: 'alpha',
-            originator: 'LogiKarlsk',
-            type: 'text',
-            allowconcat: '6',
-            charset: 'UTF-8',
-            text: smsText,
-          });
-
-          const response = await fetch('https://se-1.cellsynt.net/sms.php?' + params.toString());
-          const result = await response.text();
-          console.log(`Cellsynt svar för ${phone}: ${result}`);
-
-          if (result.startsWith('OK')) {
-            smsCount++;
-          } else {
-            console.error(`SMS-fel: ${result}`);
-          }
+          const ok = await sendSms(phone, smsText);
+          if (ok) smsCount++;
         } catch (err) {
           console.error(`SMS-fel till ${phone}:`, err.message);
         }
@@ -166,13 +165,13 @@ app.post('/api/invite', async (req, res) => {
           to: email,
           subject: 'Inbjudan till LogiKarlskoga',
           html: `
-            <div>
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
               <h2>Välkommen till LogiKarlskoga!</h2>
               <p>${message.replace(/\n/g, '<br>')}</p>
-              <p>
-                <a href="${BASE_URL}/register">Registrera dig här</a>
+              <p style="margin-top:24px">
+                <a href="${BASE_URL}/register" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Registrera dig här</a>
               </p>
-              <p>
+              <p style="margin-top:24px;font-size:12px;color:#888">
                 Detta mejl skickades via LogiKarlskoga
               </p>
             </div>
@@ -206,26 +205,11 @@ app.post('/api/send-sms', async (req, res) => {
       return res.status(400).json({ error: 'Ogiltigt telefonnummer' });
     }
 
-    const params = new URLSearchParams({
-      username: CELLSYNT_USERNAME,
-      password: CELLSYNT_PASSWORD,
-      destination: phone,
-      originatortype: 'alpha',
-      originator: 'LogiKarlsk',
-      type: 'text',
-      allowconcat: '6',
-      charset: 'UTF-8',
-      text: message,
-    });
-
-    const response = await fetch('https://se-1.cellsynt.net/sms.php?' + params.toString());
-    const result = await response.text();
-    console.log(`SMS till ${phone}: ${result}`);
-
-    if (result.startsWith('OK')) {
-      res.json({ success: true, result });
+    const ok = await sendSms(phone, message);
+    if (ok) {
+      res.json({ success: true });
     } else {
-      res.status(400).json({ error: result });
+      res.status(400).json({ error: 'SMS kunde inte skickas' });
     }
   } catch (err) {
     console.error('SMS error:', err);
@@ -236,7 +220,7 @@ app.post('/api/send-sms', async (req, res) => {
 // ===== Mejl vid borttagning av medlem =====
 app.post('/api/member-removed', async (req, res) => {
   try {
-    const { email, name, company } = req.body;
+    const { email, name } = req.body;
 
     if (!email) {
       return res.status(400).json({ error: 'email krävs' });
@@ -247,11 +231,11 @@ app.post('/api/member-removed', async (req, res) => {
       to: email,
       subject: 'Du har tagits bort från LogiKarlskoga',
       html: `
-        <div>
+        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
           <h2>Hej ${name || ''},</h2>
           <p>Vi vill informera dig om att du har tagits bort från medlemsregistret i LogiKarlskoga.</p>
           <p>Om du har frågor, kontakta oss genom att svara på detta mejl.</p>
-          <p>Med vänliga hälsningar,<br/>LogiKarlskoga</p>
+          <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
         </div>
       `,
     });
@@ -273,18 +257,33 @@ app.post('/api/meeting-invite-external', async (req, res) => {
       return res.status(400).json({ error: 'Saknar obligatoriska fält' });
     }
 
-    const results = await Promise.allSettled(
-      emails.map((email) =>
-        resend.emails.send({
+    let sent = 0;
+
+    for (const email of emails) {
+      try {
+        const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}`;
+        const htmlMessage = message.replace(/\n/g, '<br>');
+
+        await resend.emails.send({
           from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
           to: email,
           subject: subject,
-          text: message,
-        })
-      )
-    );
+          html: `
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+              <p>${htmlMessage}</p>
+              <p style="margin-top:24px">
+                <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold">Svara på inbjudan</a>
+              </p>
+            </div>
+          `,
+        });
+        sent++;
+        console.log(`Extern inbjudan skickad till ${email}`);
+      } catch (err) {
+        console.error(`Extern inbjudan fel till ${email}:`, err.message);
+      }
+    }
 
-    const sent = results.filter((r) => r.status === 'fulfilled').length;
     res.json({ count: sent });
   } catch (err) {
     console.error('meeting-invite-external error:', err);
@@ -292,15 +291,6 @@ app.post('/api/meeting-invite-external', async (req, res) => {
   }
 });
 
-// Health check
-app.get('/', (req, res) => {
-  res.json({ status: 'ok', service: 'LogiKarlskoga API' });
-});
-
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Server körs på port ${PORT}`);
-});
 // ===== Mejl vid inställt möte =====
 app.post('/api/meeting-cancelled', async (req, res) => {
   try {
@@ -320,13 +310,13 @@ app.post('/api/meeting-cancelled', async (req, res) => {
           to: email,
           subject: `Inställt möte: ${headline}`,
           html: `
-            <div>
+            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
               <h2>Hej ${name || ''},</h2>
               <p>Mötet <strong>${headline}</strong> har ställts in.</p>
               <p><strong>Datum:</strong> ${dateStr}</p>
               <p><strong>Plats:</strong> ${place}</p>
               <p>Kontakta arrangören om du har frågor.</p>
-              <p>Med vänliga hälsningar,<br/>LogiKarlskoga</p>
+              <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
             </div>
           `,
         });
@@ -342,29 +332,71 @@ app.post('/api/meeting-cancelled', async (req, res) => {
     res.status(500).json({ error: 'Internt serverfel' });
   }
 });
-app.post('/api/meeting-updated', async (req, res) => {
-  const { recipients, headline, oldDate, newDate, place } = req.body;
-  const { format } = require('date-fns');
-  const { sv } = require('date-fns/locale');
-  
-  const newFormatted = format(new Date(newDate), "d MMMM yyyy 'kl' HH:mm", { locale: sv });
-  
-  for (const r of recipients) {
-    // Skicka mejl via Resend
-    await resend.emails.send({
-      from: 'LogiKarlskoga <no-reply@gronfeltsgarden.se>',
-      to: r.email,
-      subject: `Ändrad tid: ${headline}`,
-      html: `<p>Hej ${r.name},</p><p>Mötet <strong>${headline}</strong> har fått ny tid: <strong>${newFormatted}</strong>, ${place}.</p>`,
-    });
 
-    // Skicka SMS om mobilnummer finns
-    if (r.mobile) {
-      // Skicka via Cellsynt med ert befintliga mönster
-      // "Mötet {headline} har ändrats till {newFormatted}, {place}"
+// ===== Mejl + SMS vid ändrat möte =====
+app.post('/api/meeting-updated', async (req, res) => {
+  try {
+    const { recipients, headline, newDate, place } = req.body;
+
+    if (!recipients || recipients.length === 0) {
+      return res.status(400).json({ error: 'Inga mottagare' });
     }
+
+    const newFormatted = formatDateTime(newDate);
+    let emailCount = 0;
+    let smsCount = 0;
+
+    for (const r of recipients) {
+      // Skicka mejl
+      if (r.email) {
+        try {
+          await resend.emails.send({
+            from: 'LogiKarlskoga <info@gronfeltsgarden.se>',
+            to: r.email,
+            subject: `Ändrad tid: ${headline}`,
+            html: `
+              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px">
+                <h2>Hej ${r.name || ''},</h2>
+                <p>Mötet <strong>${headline}</strong> har fått ny tid.</p>
+                <p><strong>Ny tid:</strong> ${newFormatted}</p>
+                <p><strong>Plats:</strong> ${place}</p>
+                <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
+              </div>
+            `,
+          });
+          emailCount++;
+        } catch (err) {
+          console.error(`Update email error for ${r.email}:`, err.message);
+        }
+      }
+
+      // Skicka SMS
+      const phone = formatPhone(r.mobile);
+      if (phone) {
+        try {
+          const smsText = `Ändrad tid: ${headline}\nNy tid: ${newFormatted}\nPlats: ${place}`;
+          const ok = await sendSms(phone, smsText);
+          if (ok) smsCount++;
+        } catch (err) {
+          console.error(`Update SMS error for ${phone}:`, err.message);
+        }
+      }
+    }
+
+    console.log(`Meeting updated: ${emailCount} mejl, ${smsCount} SMS`);
+    res.json({ success: true, emailCount, smsCount });
+  } catch (err) {
+    console.error('Meeting updated error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
   }
-  
-  res.json({ success: true });
 });
 
+// Health check
+app.get('/', (req, res) => {
+  res.json({ status: 'ok', service: 'LogiKarlskoga API' });
+});
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Server körs på port ${PORT}`);
+});
