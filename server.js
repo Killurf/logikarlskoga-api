@@ -105,15 +105,15 @@ app.post('/api/meeting-invites', async (req, res) => {
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
-              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+              <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
                 <h2>${meeting.headline}</h2>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
                 <p><strong>Datum:</strong> ${dateStr}</p>
                 <p><strong>Plats:</strong> ${meeting.place}</p>
                 ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
-                ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+                ${meeting.created_by_name ? `<p>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
                 <p style="margin-top:20px;">
-                  <a href="${respondUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Svara på inbjudan</a>
+                  <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">Svara på inbjudan</a>
                 </p>
               </div>
             `,
@@ -128,7 +128,7 @@ app.post('/api/meeting-invites', async (req, res) => {
       const phone = formatPhone(user.mobile);
       if (phone) {
         try {
-          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: https://${respondUrl.replace('https://', '')}`;
+          const smsText = `${meeting.headline}\n${dateStr}\nPlats: ${meeting.place}\n\nSvara: ${respondUrl}`;
           const ok = await sendSms(phone, smsText);
           if (ok) smsCount++;
         } catch (err) {
@@ -163,13 +163,13 @@ app.post('/api/invite', async (req, res) => {
           to: email,
           subject: 'Inbjudan till LogiKarlskoga',
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+            <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
               <h2>Välkommen till LogiKarlskoga!</h2>
               <p>${message.replace(/\n/g, '<br>')}</p>
               <p style="margin-top:20px;">
-                <a href="${BASE_URL}/register" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Registrera dig här</a>
+                <a href="${BASE_URL}/register" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">Registrera dig här</a>
               </p>
-              <p style="margin-top:30px;font-size:12px;color:#888;">
+              <p style="color:#888;font-size:12px;margin-top:30px;">
                 Detta mejl skickades via LogiKarlskoga
               </p>
             </div>
@@ -229,8 +229,8 @@ app.post('/api/member-removed', async (req, res) => {
       to: email,
       subject: 'Du har tagits bort från LogiKarlskoga',
       html: `
-        <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-          <h2>Hej ${name || ''},</h2>
+        <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
+          <p>Hej ${name || ''},</p>
           <p>Vi vill informera dig om att du har tagits bort från medlemsregistret i LogiKarlskoga.</p>
           <p>Om du har frågor, kontakta oss genom att svara på detta mejl.</p>
           <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
@@ -255,7 +255,6 @@ app.post('/api/meeting-invite-external', async (req, res) => {
       return res.status(400).json({ error: 'Saknar obligatoriska fält' });
     }
 
-    // Hämta mötet från databasen för att säkerställa korrekt info
     const { data: meeting, error: meetingError } = await supabase
       .from('meetings')
       .select('*')
@@ -278,18 +277,18 @@ app.post('/api/meeting-invite-external', async (req, res) => {
           to: email,
           subject: subject || `Mötesinbjudan: ${meeting.headline}`,
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+            <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
               <h2>${meeting.headline}</h2>
               ${meeting.content ? `<p>${meeting.content}</p>` : ''}
               <p><strong>Datum:</strong> ${dateStr}</p>
               <p><strong>Plats:</strong> ${meeting.place}</p>
               ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
-              ${meeting.created_by_name ? `<p><strong>Inbjudan av:</strong> ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
-              ${message ? `<hr style="margin:20px 0;border:none;border-top:1px solid #eee;"><p>${message.replace(/\n/g, '<br>')}</p>` : ''}
-              <p style="margin-top:24px;">
-                <a href="${respondUrl}" style="background:#2563eb;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:bold;">Svara på inbjudan</a>
+              ${meeting.created_by_name ? `<p>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</p>` : ''}
+              ${message ? `<p>${message.replace(/\n/g, '<br>')}</p>` : ''}
+              <p style="margin-top:20px;">
+                <a href="${respondUrl}" style="background:#2563eb;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;">Svara på inbjudan</a>
               </p>
-              <p style="margin-top:30px;font-size:12px;color:#888;">
+              <p style="color:#888;font-size:12px;margin-top:30px;">
                 Detta mejl skickades via LogiKarlskoga
               </p>
             </div>
@@ -306,6 +305,69 @@ app.post('/api/meeting-invite-external', async (req, res) => {
   } catch (err) {
     console.error('meeting-invite-external error:', err);
     res.status(500).json({ error: 'Kunde inte skicka inbjudan' });
+  }
+});
+
+// ===== Externt mötessvar (gäst utan inloggning) =====
+app.post('/api/meeting-response-external', async (req, res) => {
+  try {
+    const { meeting_id, email, status, name, company, mobile } = req.body;
+
+    if (!meeting_id || !email || !status) {
+      return res.status(400).json({ error: 'meeting_id, email och status krävs' });
+    }
+
+    // Kolla om användaren redan finns
+    let { data: user } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase().trim())
+      .maybeSingle();
+
+    // Skapa användare om den inte finns
+    if (!user) {
+      const { data: newUser, error: createErr } = await supabase
+        .from('users')
+        .insert({
+          email: email.toLowerCase().trim(),
+          name: name || '',
+          company: company || '',
+          mobile: mobile || '',
+        })
+        .select('id')
+        .single();
+
+      if (createErr) {
+        console.error('Kunde inte skapa användare:', createErr);
+        return res.status(500).json({ error: 'Kunde inte skapa användare' });
+      }
+      user = newUser;
+    }
+
+    // Spara/uppdatera mötessvar
+    const { error: respErr } = await supabase
+      .from('meeting_responses')
+      .upsert(
+        {
+          meeting_id,
+          user_id: user.id,
+          status,
+          responded_at: new Date().toISOString(),
+          invited_at: new Date().toISOString(),
+        },
+        { onConflict: 'meeting_id,user_id' }
+      );
+
+    if (respErr) {
+      console.error('Kunde inte spara svar:', respErr);
+      return res.status(500).json({ error: 'Kunde inte spara mötessvar' });
+    }
+
+    console.log(`Mötessvar: ${email} → ${status} för möte ${meeting_id}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('meeting-response-external error:', err);
+    res.status(500).json({ error: 'Internt serverfel' });
   }
 });
 
@@ -328,8 +390,8 @@ app.post('/api/meeting-cancelled', async (req, res) => {
           to: email,
           subject: `Inställt möte: ${headline}`,
           html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-              <h2>Hej ${name || ''},</h2>
+            <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
+              <p>Hej ${name || ''},</p>
               <p>Mötet <strong>${headline}</strong> har ställts in.</p>
               <p><strong>Datum:</strong> ${dateStr}</p>
               <p><strong>Plats:</strong> ${place}</p>
@@ -372,8 +434,8 @@ app.post('/api/meeting-updated', async (req, res) => {
             to: r.email,
             subject: `Ändrad tid: ${headline}`,
             html: `
-              <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-                <h2>Hej ${r.name || ''},</h2>
+              <div style="font-family:sans-serif;max-width:600px;margin:auto;padding:20px;">
+                <p>Hej ${r.name || ''},</p>
                 <p>Mötet <strong>${headline}</strong> har fått ny tid.</p>
                 <p><strong>Ny tid:</strong> ${newFormatted}</p>
                 <p><strong>Plats:</strong> ${place}</p>
