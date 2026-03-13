@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const https = require('https');
 const { Resend } = require('resend');
 const { createClient } = require('@supabase/supabase-js');
 
@@ -375,7 +376,6 @@ app.post('/api/meeting-response-external', async (req, res) => {
       return res.status(500).json({ error: 'Kunde inte spara svar' });
     }
 
-    // Bekräftelsemejl vid accepterat svar
     if (status === 'accepted') {
       const dateStr = formatDateTime(meeting.date);
       try {
@@ -628,26 +628,59 @@ app.get('/api/send-reminders', async (req, res) => {
 });
 
 // ===== Proxy för Tillväxtverket (CORS) =====
-app.post('/api/tillvaxtverket-proxy', async (req, res) => {
-  try {
-    const response = await fetch(
-      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
+function postJson(url, payload) {
+  return new Promise((resolve, reject) => {
+    const target = new URL(url);
+    const body = JSON.stringify(payload ?? {});
+
+    const req = https.request(
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body),
+        hostname: target.hostname,
+        path: `${target.pathname}${target.search}`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+        },
+      },
+      (response) => {
+        let data = '';
+        response.on('data', (chunk) => {
+          data += chunk;
+        });
+        response.on('end', () => {
+          resolve({ status: response.statusCode || 500, data });
+        });
       }
     );
-    if (!response.ok) {
-      const text = await response.text();
-      console.error('Tillväxtverket API error:', response.status, text);
-      return res.status(response.status).json({ error: text });
+
+    req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy(new Error('Timeout mot Tillväxtverket API'));
+    });
+
+    req.write(body);
+    req.end();
+  });
+}
+
+app.post('/api/tillvaxtverket-proxy', async (req, res) => {
+  try {
+    const { status, data } = await postJson(
+      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
+      req.body
+    );
+
+    if (status < 200 || status >= 300) {
+      console.error('Tillväxtverket API error:', status, data);
+      return res.status(status).json({ error: data });
     }
-    const data = await response.json();
-    res.json(data);
+
+    const json = JSON.parse(data);
+    return res.json(json);
   } catch (err) {
     console.error('Tillväxtverket proxy error:', err);
-    res.status(500).json({ error: 'Kunde inte hämta data' });
+    return res.status(500).json({ error: `Kunde inte hämta data: ${err.message}` });
   }
 });
 
