@@ -640,3 +640,21 @@ const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server körs på port ${PORT}`);
 });
+// ===== Proxy för Tillväxtverket (CORS) =====
+app.post('/api/tillvaxtverket-proxy', async (req, res) => {
+  try {
+    const response = await fetch(
+      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+      }
+    );
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Tillväxtverket proxy error:', err);
+    res.status(500).json({ error: 'Kunde inte hämta data' });
+  }
+});
