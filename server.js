@@ -541,7 +541,7 @@ app.post('/api/attendee-removed', async (req, res) => {
   }
 });
 
-// ===== Påminnelse dagen innan möte (anropas av extern cron) =====
+// ===== Påminnelse dagen innan möte =====
 async function sendMeetingReminders() {
   const now = new Date();
   const swedenNow = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Stockholm' }));
@@ -627,7 +627,7 @@ app.get('/api/send-reminders', async (req, res) => {
   }
 });
 
-// ===== Proxy för Tillväxtverket (CORS) =====
+// ===== Proxy för SCB:s API (CORS) =====
 function postJson(url, payload) {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
@@ -656,7 +656,7 @@ function postJson(url, payload) {
 
     req.on('error', reject);
     req.setTimeout(15000, () => {
-      req.destroy(new Error('Timeout mot Tillväxtverket API'));
+      req.destroy(new Error('Timeout mot SCB API'));
     });
 
     req.write(body);
@@ -664,22 +664,22 @@ function postJson(url, payload) {
   });
 }
 
-app.post('/api/tillvaxtverket-proxy', async (req, res) => {
+app.post('/api/scb-proxy', async (req, res) => {
   try {
     const { status, data } = await postJson(
-      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
+      'https://api.scb.se/OV0104/v1/doris/sv/ssd/START/NV/NV1101/NV1101B/NV1101B01',
       req.body
     );
 
     if (status < 200 || status >= 300) {
-      console.error('Tillväxtverket API error:', status, data);
+      console.error('SCB API error:', status, data);
       return res.status(status).json({ error: data });
     }
 
     const json = JSON.parse(data);
     return res.json(json);
   } catch (err) {
-    console.error('Tillväxtverket proxy error:', err);
+    console.error('SCB proxy error:', err);
     return res.status(500).json({ error: `Kunde inte hämta data: ${err.message}` });
   }
 });
