@@ -627,6 +627,30 @@ app.get('/api/send-reminders', async (req, res) => {
   }
 });
 
+// ===== Proxy för Tillväxtverket (CORS) =====
+app.post('/api/tillvaxtverket-proxy', async (req, res) => {
+  try {
+    const response = await fetch(
+      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(req.body),
+      }
+    );
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('Tillväxtverket API error:', response.status, text);
+      return res.status(response.status).json({ error: text });
+    }
+    const data = await response.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Tillväxtverket proxy error:', err);
+    res.status(500).json({ error: 'Kunde inte hämta data' });
+  }
+});
+
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'LogiKarlskoga API' });
@@ -639,22 +663,4 @@ app.get('/api/health', (req, res) => {
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`Server körs på port ${PORT}`);
-});
-// ===== Proxy för Tillväxtverket (CORS) =====
-app.post('/api/tillvaxtverket-proxy', async (req, res) => {
-  try {
-    const response = await fetch(
-      'https://statistik.tillvaxtverket.se/PXWeb/api/v1/sv/A_Tillvaxtverket/Turism/Inkvartering/Belaggning/Turism_Belaggning_M.px',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req.body),
-      }
-    );
-    const data = await response.json();
-    res.json(data);
-  } catch (err) {
-    console.error('Tillväxtverket proxy error:', err);
-    res.status(500).json({ error: 'Kunde inte hämta data' });
-  }
 });
