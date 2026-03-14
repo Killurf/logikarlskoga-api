@@ -710,8 +710,8 @@ function postJson(url, payload) {
         });
       }
     );
-
-    req.on('error', reject;
+    
+    req.on('error', reject);
     req.setTimeout(15000, () => {
       req.destroy(new Error('Timeout mot SCB API'));
     });
