@@ -745,6 +745,44 @@ app.get('/api/inbound-emails', async (req, res) => {
   }
 });
 
+// ===== Välkomstmejl till ny medlem =====
+app.post('/api/welcome-member', async (req, res) => {
+  try {
+    const { email, name, company } = req.body;
+    if (!email) return res.status(400).json({ error: 'email krävs' });
+
+    const { data, error } = await resend.emails.send({
+      from: 'LogiKarlskoga <no-reply@logikarlskoga.se>',
+      to: email,
+      subject: 'Välkommen till LogiKarlskoga!',
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+          <h2>Välkommen${name ? `, ${name}` : ''}!</h2>
+          <p>Ditt konto hos LogiKarlskoga har skapats${company ? ` för <strong>${company}</strong>` : ''}.</p>
+          <p>Du är nu medlem i vår hotell- och vandrarhemsgrupp. Logga in för att se möten, medlemmar och statistik:</p>
+          <p style="margin: 24px 0;">
+            <a href="${BASE_URL}/login" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+              Logga in
+            </a>
+          </p>
+          <p style="color: #666; font-size: 14px;">Vid frågor, kontakta din administratör.</p>
+        </div>
+      `,
+    });
+
+    if (error) {
+      console.error('Welcome email error:', error);
+      return res.status(500).json({ error: error.message });
+    }
+
+    console.log(`Welcome email sent to ${email}`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Welcome email exception:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'LogiKarlskoga API' });
