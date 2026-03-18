@@ -97,7 +97,8 @@ app.post('/api/meeting-invites', async (req, res) => {
     let smsCount = 0;
 
     for (const user of users) {
-      const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(user.email)}`;
+      const yesUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(user.email)}&response=yes`;
+      const noUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(user.email)}&response=no`;
 
       if (user.email) {
         try {
@@ -107,14 +108,34 @@ app.post('/api/meeting-invites', async (req, res) => {
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>${meeting.headline}</h2>
+              <h2>${meeting.headline}</h2>
+                <p style="margin-top: 4px; color: #555;">Inbjudan från Logigruppen som driver hotell och vandrarhem i Karlskoga.</p>
                 ${meeting.content ? `<p>${meeting.content}</p>` : ''}
-                <p><strong>Datum:</strong> ${dateStr}</p>
-                <p><strong>Plats:</strong> ${meeting.place}</p>
-                ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
+                <table cellpadding="0" cellspacing="0" style="margin-top: 8px; margin-bottom: 8px;">
+                  <tr>
+                    <td style="padding: 4px 0;"><strong>Datum:</strong></td>
+                    <td style="padding: 4px 0 4px 12px;">${dateStr}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 4px 0;"><strong>Plats:</strong></td>
+                    <td style="padding: 4px 0 4px 12px;">${meeting.place}</td>
+                  </tr>
+                  ${meeting.osa ? `<tr><td style="padding: 4px 0;"><strong>OSA senast:</strong></td><td style="padding: 4px 0 4px 12px;">${formatDateTime(meeting.osa)}</td></tr>` : ''}
+                </table>
                 ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
-                <p style="margin-top: 24px;">
-                  <a href="${respondUrl}" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Svara på inbjudan</a>
+                <p style="margin-top: 24px; font-size: 16px; font-weight: 600;">Kan du komma?</p>
+                <table cellpadding="0" cellspacing="0" style="margin-top: 8px;">
+                  <tr>
+                    <td style="padding-right: 12px;">
+                      <a href="${yesUrl}" style="background: #16a34a; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Ja, jag kommer</a>
+                    </td>
+                    <td>
+                      <a href="${noUrl}" style="background: #dc2626; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Nej, jag kan inte</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin-top: 32px; font-size: 12px; color: #888;">
+                  Detta mejl skickades via LogiKarlskoga
                 </p>
               </div>
             `,
@@ -271,7 +292,8 @@ app.post('/api/meeting-invite-external', async (req, res) => {
 
     for (const email of emails) {
       try {
-        const respondUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}`;
+        const yesUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}&response=yes`;
+        const noUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}&response=no`;
 
         await resend.emails.send({
           from: 'LogiKarlskoga <info@logikarlskoga.se>',
@@ -280,15 +302,32 @@ app.post('/api/meeting-invite-external', async (req, res) => {
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>${meeting.headline}</h2>
+              <p style="margin-top: 4px; color: #555;">Inbjudan från Logigruppen som driver hotell och vandrarhem i Karlskoga.</p>
               ${meeting.content ? `<p>${meeting.content}</p>` : ''}
-              <p><strong>Datum:</strong> ${dateStr}</p>
-              <p><strong>Plats:</strong> ${meeting.place}</p>
-              ${meeting.osa ? `<p><strong>OSA senast:</strong> ${formatDateTime(meeting.osa)}</p>` : ''}
+              <table cellpadding="0" cellspacing="0" style="margin-top: 8px; margin-bottom: 8px;">
+                <tr>
+                  <td style="padding: 4px 0;"><strong>Datum:</strong></td>
+                  <td style="padding: 4px 0 4px 12px;">${dateStr}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0;"><strong>Plats:</strong></td>
+                  <td style="padding: 4px 0 4px 12px;">${meeting.place}</td>
+                </tr>
+                ${meeting.osa ? `<tr><td style="padding: 4px 0;"><strong>OSA senast:</strong></td><td style="padding: 4px 0 4px 12px;">${formatDateTime(meeting.osa)}</td></tr>` : ''}
+              </table>
               ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
               ${message ? `<p>${message.replace(/\n/g, '<br>')}</p>` : ''}
-              <p style="margin-top: 24px;">
-                <a href="${respondUrl}" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Svara på inbjudan</a>
-              </p>
+              <p style="margin-top: 24px; font-size: 16px; font-weight: 600;">Kan du komma?</p>
+              <table cellpadding="0" cellspacing="0" style="margin-top: 8px;">
+                <tr>
+                  <td style="padding-right: 12px;">
+                    <a href="${yesUrl}" style="background: #16a34a; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Ja, jag kommer</a>
+                  </td>
+                  <td>
+                    <a href="${noUrl}" style="background: #dc2626; color: white; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">Nej, jag kan inte</a>
+                  </td>
+                </tr>
+              </table>
               <p style="margin-top: 32px; font-size: 12px; color: #888;">
                 Detta mejl skickades via LogiKarlskoga
               </p>
