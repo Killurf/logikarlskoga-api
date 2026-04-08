@@ -822,6 +822,92 @@ app.post('/api/welcome-member', async (req, res) => {
   }
 });
 
+// ===== Statistiksläpp – kontrollera datum och skicka notifiering =====
+const STATISTICS_RELEASES = [
+  { releaseDate: "2026-02-26", description: "Preliminär statistik för januari 2026" },
+  { releaseDate: "2026-03-26", description: "Slutgiltig statistik för 2025" },
+  { releaseDate: "2026-03-26", description: "Preliminär statistik för februari 2026" },
+  { releaseDate: "2026-04-28", description: "Preliminär statistik för mars 2026" },
+  { releaseDate: "2026-05-28", description: "Preliminär statistik för april 2026" },
+  { releaseDate: "2026-06-25", description: "Preliminär statistik för maj 2026" },
+  { releaseDate: "2026-07-30", description: "Preliminär statistik för juni 2026" },
+  { releaseDate: "2026-08-27", description: "Preliminär statistik för juli 2026" },
+  { releaseDate: "2026-09-29", description: "Preliminär statistik för augusti 2026" },
+  { releaseDate: "2026-10-29", description: "Preliminär statistik för september 2026" },
+  { releaseDate: "2026-11-26", description: "Preliminär statistik för oktober 2026" },
+  { releaseDate: "2026-12-22", description: "Preliminär statistik för november 2026" },
+  { releaseDate: "2027-01-28", description: "Preliminär statistik för december 2026" },
+];
+
+const TILLVAXTVERKET_URL = "https://tillvaxtdata.tillvaxtverket.se/statistikportal#page=72b01aa0-1d4a-425c-8684-dbce0319b39e";
+const SUPERADMIN_EMAIL = "ulf@gronfeltsgarden.se";
+
+
+
+
+async function checkAndNotifyStatisticsReleases() {
+  const today = new Date().toISOString().slice(0, 10);
+  
+  for (const release of STATISTICS_RELEASES) {
+    if (release.releaseDate > today) continue; // Not yet due
+    
+    // Check if already notified
+    const { data: existing } = await supabase
+      .from('statistics_release_notifications')
+      .select('id')
+      .eq('release_date', release.releaseDate)
+      .eq('description', release.description)
+      .maybeSingle();
+    
+    if (existing) continue; // Already notified
+    
+    // Send email to superadmin
+    try {
+      await resend.emails.send({
+        from: 'LogiKarlskoga <info@logikarlskoga.se>',
+        to: SUPERADMIN_EMAIL,
+        subject: `Ny statistik tillgänglig: ${release.description}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2>Ny statistik tillgänglig</h2>
+            <p><strong>${release.description}</strong></p>
+            <p>Statistiken skulle ha släppts den <strong>${release.releaseDate}</strong> och bör nu finnas tillgänglig hos Tillväxtverket.</p>
+            <p style="margin: 24px 0;">
+              <a href="${TILLVAXTVERKET_URL}" style="background: #2563eb; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+                Öppna Tillväxtverkets statistikportal
+              </a>
+            </p>
+            <p style="color: #666; font-size: 14px;">Kom ihåg att uppdatera statistikdatan i LogiKarlskoga efter att du hämtat den nya statistiken.</p>
+            <p style="margin-top: 32px; font-size: 12px; color: #888;">Detta mejl skickades automatiskt via LogiKarlskoga</p>
+          </div>
+        `,
+      });
+      
+      // Mark as notified
+      await supabase
+        .from('statistics_release_notifications')
+        .insert({
+          release_date: release.releaseDate,
+          description: release.description,
+        });
+      
+      console.log(`Statistiknotifiering skickad för: ${release.description}`);
+    } catch (err) {
+      console.error(`Statistiknotifiering fel för ${release.description}:`, err.message);
+    }
+  }
+}
+
+app.get('/api/check-statistics-releases', async (req, res) => {
+  try {
+    await checkAndNotifyStatisticsReleases();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Statistics release check error:', err);
+    res.status(500).json({ error: 'Kunde inte kontrollera statistiksläpp' });
+  }
+});
+
 // Health check
 app.get('/', (req, res) => {
   res.json({ status: 'ok', service: 'LogiKarlskoga API' });
