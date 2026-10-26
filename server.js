@@ -170,7 +170,7 @@ app.post('/api/meeting-invites', async (req, res) => {
 // ===== Bjud in nya medlemmar via e-post =====
 app.post('/api/invite', async (req, res) => {
   try {
-    const { emails, message } = req.body;
+    const { emails, message, hideRegisterButton } = req.body;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
       return res.status(400).json({ error: 'Inga e-postadresser angivna' });
@@ -188,9 +188,10 @@ app.post('/api/invite', async (req, res) => {
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Välkommen till LogiKarlskoga!</h2>
               <p>${message.replace(/\n/g, '<br>')}</p>
+              ${hideRegisterButton ? '' : `
               <p style="margin-top: 24px;">
                 <a href="${BASE_URL}/register" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Registrera dig här</a>
-              </p>
+              </p>`}
               <p style="margin-top: 32px; font-size: 12px; color: #888;">
                 Detta mejl skickades via LogiKarlskoga
               </p>
