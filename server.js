@@ -103,7 +103,7 @@ app.post('/api/meeting-invites', async (req, res) => {
       if (user.email) {
         try {
           await resend.emails.send({
-            from: 'LogiKarlskoga <info@logikarlskoga.se>',
+            from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
             to: user.email,
             subject: `Mötesinbjudan: ${meeting.headline}`,
             html: `
@@ -181,7 +181,7 @@ app.post('/api/invite', async (req, res) => {
     for (const email of emails) {
       try {
         await resend.emails.send({
-          from: 'LogiKarlskoga <info@logikarlskoga.se>',
+          from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
           to: email,
           subject: 'Inbjudan till LogiKarlskoga',
           html: `
@@ -248,7 +248,7 @@ app.post('/api/member-removed', async (req, res) => {
     }
 
     await resend.emails.send({
-      from: 'LogiKarlskoga <info@logikarlskoga.se>',
+      from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
       to: email,
       subject: 'Du har tagits bort från LogiKarlskoga',
       html: `
@@ -297,7 +297,7 @@ app.post('/api/meeting-invite-external', async (req, res) => {
         const noUrl = `${BASE_URL}/mr?m=${meeting_id}&email=${encodeURIComponent(email)}&response=no`;
 
         await resend.emails.send({
-          from: 'LogiKarlskoga <info@logikarlskoga.se>',
+          from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
           to: email,
           subject: subject || `Mötesinbjudan: ${meeting.headline}`,
           html: `
@@ -421,7 +421,7 @@ app.post('/api/meeting-response-external', async (req, res) => {
       const dateStr = formatDateTime(meeting.date);
       try {
         await resend.emails.send({
-          from: 'LogiKarlskoga <info@logikarlskoga.se>',
+          from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
           to: normalizedEmail,
           subject: `Bekräftelse: ${meeting.headline}`,
           html: `
@@ -464,7 +464,7 @@ app.post('/api/meeting-cancelled', async (req, res) => {
     for (const { email, name } of emails) {
       try {
         await resend.emails.send({
-          from: 'LogiKarlskoga <info@logikarlskoga.se>',
+          from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
           to: email,
           subject: `Inställt möte: ${headline}`,
           html: `
@@ -508,7 +508,7 @@ app.post('/api/meeting-updated', async (req, res) => {
       if (r.email) {
         try {
           await resend.emails.send({
-            from: 'LogiKarlskoga <info@logikarlskoga.se>',
+            from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
             to: r.email,
             subject: `Ändrat möte: ${headline}`,
             html: `
@@ -559,7 +559,7 @@ app.post('/api/attendee-removed', async (req, res) => {
     const dateStr = formatDateTime(date);
 
     await resend.emails.send({
-      from: 'LogiKarlskoga <info@logikarlskoga.se>',
+      from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
       to: email,
       subject: `Du har tagits bort från mötet: ${headline}`,
       html: `
@@ -630,7 +630,7 @@ async function sendMeetingReminders() {
       if (!user.email) continue;
       try {
         await resend.emails.send({
-          from: 'LogiKarlskoga <info@logikarlskoga.se>',
+          from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
           to: user.email,
           subject: `Påminnelse imorgon: ${meeting.headline}`,
           html: `
@@ -792,7 +792,7 @@ app.post('/api/welcome-member', async (req, res) => {
     if (!email) return res.status(400).json({ error: 'email krävs' });
 
     const { data, error } = await resend.emails.send({
-      from: 'LogiKarlskoga <no-reply@logikarlskoga.se>',
+      from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
       to: email,
       subject: 'Välkommen till LogiKarlskoga!',
       html: `
@@ -865,7 +865,7 @@ async function checkAndNotifyStatisticsReleases() {
     // Send email to superadmin
     try {
       await resend.emails.send({
-        from: 'LogiKarlskoga <info@logikarlskoga.se>',
+        from: 'LogiKarlskoga <inbjudan@logikarlskoga.se>',
         to: SUPERADMIN_EMAIL,
         subject: `Ny statistik tillgänglig: ${release.description}`,
         html: `
