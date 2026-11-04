@@ -3,9 +3,11 @@ const cors = require('cors');
 const https = require('https');
 const { Resend } = require('resend');
 const { createClient } = require('@supabase/supabase-js');
+const { createInboundHandlers } = require('./render/inboundEmail.cjs');
 
 const app = express();
 app.use(cors());
+app.use('/api/inbound-email', express.raw({ type: 'application/json' }));
 app.use(express.json());
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -725,65 +727,14 @@ app.post('/api/tillvaxtverket-proxy', async (req, res) => {
   }
 });
 
-// ===== Ta emot inkommande mejl via Resend Inbound Webhook =====
-app.post('/api/inbound-email', async (req, res) => {
-  try {
-    const payload = req.body;
-
-    // Resend skickar olika event-typer; vi bryr oss om 'email.received'
-    const data = payload.data || payload;
-
-    const from = data.from || data.envelope?.from || '';
-    const to = data.to || data.envelope?.to || '';
-    const subject = data.subject || '(Inget ämne)';
-    const html = data.html || '';
-    const text = data.text || '';
-
-    const { error } = await supabase
-      .from('inbound_emails')
-      .insert({
-        from_address: typeof from === 'string' ? from : JSON.stringify(from),
-        to_address: typeof to === 'string' ? to : JSON.stringify(to),
-        subject,
-        html_body: html,
-        text_body: text,
-        received_at: new Date().toISOString(),
-        is_read: false,
-      });
-
-    if (error) {
-      console.error('Kunde inte spara inkommande mejl:', error);
-      return res.status(500).json({ error: 'Kunde inte spara mejl' });
-    }
-
-    console.log(`Inkommande mejl sparat: "${subject}" från ${from}`);
-    res.json({ success: true });
-  } catch (err) {
-    console.error('Inbound email error:', err);
-    res.status(500).json({ error: 'Internt serverfel' });
-  }
+// ===== Signerad mottagning och skyddad inkorg (extern databas) =====
+const inboundHandlers = createInboundHandlers({
+  supabase,
+  apiKey: process.env.RESEND_API_KEY,
+  webhookSecret: process.env.RESEND_WEBHOOK_SECRET,
 });
-
-// ===== Hämta inkommande mejl (för superadmins) =====
-app.get('/api/inbound-emails', async (req, res) => {
-  try {
-    const { data, error } = await supabase
-      .from('inbound_emails')
-      .select('*')
-      .order('received_at', { ascending: false })
-      .limit(50);
-
-    if (error) {
-      console.error('Kunde inte hämta mejl:', error);
-      return res.status(500).json({ error: 'Kunde inte hämta mejl' });
-    }
-
-    res.json({ emails: data });
-  } catch (err) {
-    console.error('Inbound emails list error:', err);
-    res.status(500).json({ error: 'Internt serverfel' });
-  }
-});
+app.post('/api/inbound-email', inboundHandlers.receive);
+app.get('/api/inbound-emails', inboundHandlers.list);
 
 // ===== Välkomstmejl till ny medlem =====
 app.post('/api/welcome-member', async (req, res) => {
