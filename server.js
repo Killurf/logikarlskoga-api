@@ -4,6 +4,7 @@ const https = require('https');
 const { Resend } = require('resend');
 const { createClient } = require('@supabase/supabase-js');
 const { createInboundHandlers } = require('./render/inboundEmail.cjs');
+const { createManualReminderHandler } = require('./render/manualReminders.cjs');
 
 const app = express();
 app.use(cors());
@@ -658,6 +659,8 @@ async function sendMeetingReminders() {
 
   return { sent: totalSent, meetings: meetings.length };
 }
+
+app.post('/api/send-reminders', createManualReminderHandler({ supabase, resend }));
 
 app.get('/api/send-reminders', async (req, res) => {
   try {
