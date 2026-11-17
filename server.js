@@ -506,7 +506,7 @@ app.post('/api/meeting-cancelled', async (req, res) => {
 // ===== Mejl + SMS vid ändrat möte =====
 app.post('/api/meeting-updated', async (req, res) => {
   try {
-    const { recipients, headline, newDate, place } = req.body;
+    const { recipients, headline, content, newDate, place } = req.body;
 
     if (!recipients || recipients.length === 0) {
       return res.status(400).json({ error: 'Inga mottagare' });
@@ -527,6 +527,7 @@ app.post('/api/meeting-updated', async (req, res) => {
               <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
                 <p>Hej ${r.name || ''},</p>
                 <p>Mötet <strong>${headline}</strong> har uppdaterats.</p>
+                ${formatMessageHtml(content)}
                 <p><strong>Datum:</strong> ${newFormatted}</p>
                 <p><strong>Plats:</strong> ${place}</p>
                 <p>Med vänliga hälsningar,<br>LogiKarlskoga</p>
