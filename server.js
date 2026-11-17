@@ -4,6 +4,7 @@ const https = require('https');
 const { Resend } = require('resend');
 const { createClient } = require('@supabase/supabase-js');
 const { createInboundHandlers } = require('./render/inboundEmail.cjs');
+const { createSmsBroadcastHandler } = require('./render/smsBroadcast.cjs');
 const { createManualReminderHandler } = require('./render/manualReminders.cjs');
 
 const app = express();
@@ -881,6 +882,8 @@ app.get('/api/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
+app.post('/api/sms-broadcast', createSmsBroadcastHandler({ supabase, sendSms, formatPhone }));
+
 app.listen(PORT, () => {
   console.log(`Server körs på port ${PORT}`);
 });
