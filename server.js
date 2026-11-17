@@ -17,6 +17,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+const formatMessageHtml = (text) => String(text || '')
+  .replace(/\r\n?|\u2028|\u2029/g, '\n')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .split(/\n[ \t\u00a0]*\n+/)
+  .map((p) => p.trim()).filter(Boolean)
+  .map((p) => `<p style="margin:0 0 14px 0">${p.replace(/\n/g, '<br>')}</p>`)
+  .join('')
+
 const BASE_URL = 'https://logikarl-magic-buddy.lovable.app';
 const CELLSYNT_USERNAME = process.env.CELLSYNT_USERNAME;
 const CELLSYNT_PASSWORD = process.env.CELLSYNT_PASSWORD;
@@ -190,7 +198,7 @@ app.post('/api/invite', async (req, res) => {
           html: `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
               <h2>Välkommen till LogiKarlskoga!</h2>
-              <p>${message.replace(/\n/g, '<br>')}</p>
+              ${formatMessageHtml(message)}
               ${hideRegisterButton ? '' : `
               <p style="margin-top: 24px;">
                 <a href="${BASE_URL}/register" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">Registrera dig här</a>
@@ -320,7 +328,7 @@ app.post('/api/meeting-invite-external', async (req, res) => {
                 ${meeting.osa ? `<tr><td style="padding: 4px 0;"><strong>OSA senast:</strong></td><td style="padding: 4px 0 4px 12px;">${formatDateTime(meeting.osa)}</td></tr>` : ''}
               </table>
               ${meeting.created_by_name ? `<p><em>Inbjudan av: ${meeting.created_by_name}${meeting.created_by_company ? ', ' + meeting.created_by_company : ''}</em></p>` : ''}
-              ${message ? `<p>${message.replace(/\n/g, '<br>')}</p>` : ''}
+              ${message ? `${formatMessageHtml(message)}` : ''}
               <p style="margin-top: 24px; font-size: 16px; font-weight: 600;">Kan du komma?</p>
               <table cellpadding="0" cellspacing="0" style="margin-top: 8px;">
                 <tr>
