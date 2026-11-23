@@ -1,3 +1,5 @@
+// Emails followers of a forum discussion when a new reply is saved.
+// Wire in server.js: app.post('/api/forum-notify', createForumNotifyHandler({ supabase, resend }));
 const FROM = 'LogiKarlskoga <noreply@logikarlskoga.se>';
 const SITE = 'https://www.logikarlskoga.se';
 const esc = (s) => String(s || '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -12,6 +14,7 @@ function createForumNotifyHandler({ supabase, resend }) {
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser(token);
       if (authError || !auth?.user) return res.status(401).json({ error: 'Inloggningen är ogiltig' });
+      // Only the comment's own author can trigger the notice, and only once per comment.
       const { data: comment } = await supabase.from('forum_comments')
         .select('id, post_id, author_id, body').eq('id', commentId).maybeSingle();
       if (!comment || comment.post_id !== postId || comment.author_id !== auth.user.id) {
@@ -20,7 +23,7 @@ function createForumNotifyHandler({ supabase, resend }) {
       const { data: post } = await supabase.from('forum_posts').select('id, title').eq('id', postId).maybeSingle();
       if (!post) return res.status(404).json({ error: 'Inlägget finns inte' });
       const { data: follows } = await supabase.from('forum_follows').select('user_id').eq('post_id', postId);
-      const ids = [...new Set((follows || []).map((f) => f.user_id))].filter((id) => id !== auth.user.id);
+      const ids = [...new Set((follows || []).map((f) => f.user_id))];
       const { data: author } = await supabase.from('users').select('name').ilike('email', auth.user.email || '').maybeSingle();
       const who = author?.name || 'En medlem';
       let sent = 0; const failed = [];
