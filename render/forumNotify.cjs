@@ -10,10 +10,11 @@ function createForumNotifyHandler({ supabase, resend }) {
     const token = req.headers.authorization?.match(/^Bearer (.+)$/)?.[1];
     if (!token) return res.status(401).json({ error: 'Logga in' });
     const { post_id: postId, comment_id: commentId } = req.body || {};
-    if (typeof postId !== 'string' || typeof commentId !== 'string') return res.status(400).json({ error: 'Ogiltig begäran' });
+    if (typeof postId !== 'string' || (commentId != null && typeof commentId !== 'string')) return res.status(400).json({ error: 'Ogiltig begäran' });
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser(token);
       if (authError || !auth?.user) return res.status(401).json({ error: 'Inloggningen är ogiltig' });
+      if (!commentId) return await notifyNewPost({ supabase, resend, auth, postId, res });
       // Only the comment's own author can trigger the notice, and only once per comment.
       const { data: comment } = await supabase.from('forum_comments')
         .select('id, post_id, author_id, body').eq('id', commentId).maybeSingle();
@@ -48,5 +49,40 @@ function createForumNotifyHandler({ supabase, resend }) {
       return res.status(500).json({ error: 'Kunde inte skicka aviseringar' });
     }
   };
+}
+const announced = new Set();
+// New post: email every forum member (accepted users, excluding municipal and other contacts), once per post.
+async function notifyNewPost({ supabase, resend, auth, postId, res }) {
+  const { data: post } = await supabase.from('forum_posts')
+    .select('id, title, body, author_id, created_at').eq('id', postId).maybeSingle();
+  if (!post) return res.status(404).json({ error: 'Inlägget finns inte' });
+  const fresh = Date.now() - new Date(post.created_at).getTime() < 15 * 60 * 1000;
+  if (post.author_id !== auth.user.id || !fresh || announced.has(postId)) return res.status(403).json({ error: 'Ej behörig' });
+  announced.add(postId);
+  const [{ data: users }, { data: mc }, { data: oc }] = await Promise.all([
+    supabase.from('users').select('name, email, invitation_accepted').eq('invitation_accepted', true),
+    supabase.from('municipal_contacts').select('email'),
+    supabase.from('other_contacts').select('email'),
+  ]);
+  const blocked = new Set([...(mc || []), ...(oc || [])].map((c) => String(c.email || '').toLowerCase()));
+  const me = String(auth.user.email || '').toLowerCase();
+  const who = (users || []).find((u) => String(u.email || '').toLowerCase() === me)?.name || 'En medlem';
+  const emails = [...new Set((users || []).map((u) => String(u.email || '').trim().toLowerCase()))]
+    .filter((e) => e.includes('@') && !e.endsWith('@karlskoga.se') && !blocked.has(e));
+  let sent = 0; let failed = 0;
+  for (const email of emails) {
+    const { error } = await resend.emails.send({
+      from: FROM, to: email,
+      subject: `Nytt inlägg i forumet: ${post.title}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:600px">
+        <p><strong>${esc(who)}</strong> har startat en ny diskussion i LogiKarlskogas medlemsforum: <strong>${esc(post.title)}</strong></p>
+        <div style="border-left:3px solid #3B4760;padding-left:12px;color:#333">${paras(post.body)}</div>
+        <p><a href="${SITE}/forum">Läs och svara i forumet</a></p>
+        <p style="color:#666;font-size:12px">Vill du få mejl när någon svarar? Klicka på "Följ diskussion" i forumet.</p>
+        <p>Med vänliga hälsningar,<br>LogiKarlskoga</p></div>`,
+    });
+    if (error) failed++; else sent++;
+  }
+  return res.json({ sent, failed });
 }
 module.exports = { createForumNotifyHandler };
